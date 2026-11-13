@@ -1,56 +1,67 @@
 import pandas as pd
+import streamlit as st
 
-# Carregar os dois datasets
-df_orders = pd.read_csv("data/olist_orders_dataset.csv")
-df_items = pd.read_csv("data/olist_order_items_dataset.csv")
+# Configuração inicial da página
+st.set_page_config(page_title="Dashboard Olist", page_icon="📊", layout="wide")
+@st.cache_data
 
-# Filtrar apenas pedidos que realmente foram entregues
-df_orders = df_orders[df_orders["order_status"] == "delivered"].copy()
+def carregar_dados():
+    df_orders = pd.read_csv("data/olist_orders_dataset.csv")
+    df_items = pd.read_csv("data/olist_order_items_dataset.csv")
 
-# Converter colunas de texto para formato de Data real (datetime)
-colunas_data = ["order_purchase_timestamp", "order_delivered_customer_date"]
-for col in colunas_data:
-    df_orders[col] = pd.to_datetime(df_orders[col])
+    df_orders = df_orders[df_orders["order_status"] == "delivered"].copy()
 
-# Criar uma coluna nova: tempo de entrega em dias
-df_orders["dias_entrega"] = (
-    df_orders["order_delivered_customer_date"] - df_orders["order_purchase_timestamp"]
-).dt.days
+    colunas_data = ["order_purchase_timestamp", "order_delivered_customer_date"]
+    for col in colunas_data:
+        df_orders[col] = pd.to_datetime(df_orders[col])
 
-# Juntar (Merge) pedidos com itens usando o ID do pedido
-df_completo = pd.merge(df_orders, df_items, on="order_id", how="inner")
+    df_orders["dias_entrega"] = (
+        df_orders["order_delivered_customer_date"]
+        - df_orders["order_purchase_timestamp"]
+    ).dt.days
 
-# Validação do resultado
-print("Total de linhas após junção:", len(df_completo))
-print("\nAmostra dos dados tratados:")
-print(df_completo[["order_id", "price", "freight_value", "dias_entrega"]].head(5))
-print("\nValores nulos restantes nas colunas principais:")
-print(df_completo[["price", "dias_entrega"]].isnull().sum())
+    df_completo = pd.merge(df_orders, df_items, on="order_id", how="inner")
 
-# Colunas para valor total e o mês da compra
-df_completo["valor_total"] = df_completo["price"] + df_completo["freight_value"]
-df_completo["mes_compra"] = df_completo["order_purchase_timestamp"].dt.to_period("M")
+    df_completo["valor_total"] = df_completo["price"] + df_completo["freight_value"]
+    df_completo["mes_compra"] = (
+        df_completo["order_purchase_timestamp"].dt.to_period("M").astype(str)
+    )
 
-# KPIs (Indicadores de performance chave) Gerais 
-faturamento_total = df_completo["valor_total"].sum()
-# Como um pedido tem vários itens, foi feito um agrupamento por order_id para achar o ticket médio real por pedido
-ticket_medio_pedido = df_completo.groupby("order_id")["valor_total"].sum().mean()
-tempo_medio_entrega = df_completo["dias_entrega"].mean()
+    return df_completo
 
-print("=== INDICADORES GERAIS ===")
-print(f'Faturamento Total (Produtos + Frete): R$ {faturamento_total:,.2f}')
-print(f'Ticket Médio por Pedido: R$ {ticket_medio_pedido:,.2f}')
-print(f'Tempo Médio de Entrega: {tempo_medio_entrega:,.2f} dias')
+df = carregar_dados()
 
-print('\n === TOP 5 MESES EM FATURAMENTO === ')
-faturamento_mensal = (
-    df_completo.groupby("mes_compra")["valor_total"]
-    .sum()
-    .sort_values(ascending=False)
-    .head(5)
+# INTERFACE VISUAL
+st.title("Painel Executivo de E-commerce (Olist)")
+st.markdown("Análise operacional de vendas, ticket medio e logística de entregas.")
+
+st.divider()
+
+faturamento_total = df["valor_total"].sum()
+ticket_medio = df.groupby("order_id")["valor_total"].sum().mean()
+tempo_entrega = df["dias_entrega"].mean()
+peso_frete = (df["freight_value"].sum() / faturamento_total) * 100
+
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("Faturamento Total", f"R$ {faturamento_total:,.2f}")
+col2.metric("Ticket Médio / Pedido", f"R$ {ticket_medio:,.2f}")
+col3.metric("Tempo Médio de Entrega", f"{tempo_entrega:,.1f} dias")
+col4.metric("Peso de Frete", f"{peso_frete:,.1f}%")
+
+st.divider()
+
+st.subheader("Amostra dos Dados Processados")
+st.dataframe(df[
+    [
+        "order_id",
+        "mes_compra",
+        "price",
+        "freight_value",
+        "valor_total",
+        "dias_entrega",
+    ]
+].head(15),
+use_container_width=True    
 )
-print(faturamento_mensal)
-
-# Impacto do Frete
-peso_frete = (df_completo["freight_value"].sum() / faturamento_total) * 100
-print(f'\nRepresentativade do Frete no Faturamento: {peso_frete:.1f}%')
