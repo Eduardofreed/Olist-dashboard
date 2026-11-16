@@ -88,7 +88,7 @@ else:
 
     st.divider()
 
-    graf_col1, graf_col2 = st.column(2)
+    graf_col1, graf_col2 = st.columns(2)
 
     with graf_col1:
         st.subheader("Evolução Mensal do Faturamento")
@@ -102,7 +102,7 @@ else:
             data=vendas_mes,
             x="mes_compra",
             y="valor_total",
-            use_container_width=True,
+            width=True,
         )
     with graf_col2:
         st.subheader("Distribuição do Tempo de Entrega (até 30 dias)")
