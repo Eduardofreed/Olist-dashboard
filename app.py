@@ -73,7 +73,7 @@ st.divider()
 if df_filtrado.empty:
     st.warning("Nenhum dado encontrado para os filtros selecionados. Ajuste a barra lateral.")
 else:
-    # Cálculos dos KPIs baseados no df_filtrado
+    # KPIs Principais
     faturamento_total = df_filtrado["valor_total"].sum()
     ticket_medio = df_filtrado.groupby("order_id")["valor_total"].sum().mean()
     tempo_entrega = df_filtrado["dias_entrega"].mean()
@@ -88,17 +88,57 @@ else:
 
     st.divider()
 
-    st.subheader(f"Amostra dos Dados Filtrados ({len(df_filtrado):,} itens)")
-    st.dataframe(
-        df_filtrado[
-            [
-                "order_id",
-                "mes_compra",
-                "price",
-                "freight_value",
-                "valor_total",
-                "dias_entrega",
-            ]
-        ].head(15),
-        use_container_width=True,
-    )
+    graf_col1, graf_col2 = st.column(2)
+
+    with graf_col1:
+        st.subheader("Evolução Mensal do Faturamento")
+        vendas_mes = (
+            df_filtrado.groupby("mes_compra")["valor_total"]
+            .sum()
+            .reset_index()
+            .sort_values("mes_compra")
+        )
+        st.line_chart(
+            data=vendas_mes,
+            x="mes_compra",
+            y="valor_total",
+            use_container_width=True,
+        )
+    with graf_col2:
+        st.subheader("Distribuição do Tempo de Entrega (até 30 dias)")
+        # Filtrado em até 30 dias para o gráfico não ficar esmagado.
+        entregas_ate_30 = df_filtrado[
+            (df_filtrado["dias_entrega"] >= 0) & (df_filtrado["dias_entrega"] <= 30)
+        ]
+        dist_entrega = (
+            entregas_ate_30["dias_entrega"]
+            .value_counts()
+            .sort_index()
+            .reset_index()
+        )
+        dist_entrega.columns = ["Dias para Entrega", "Quantidade de Itens"]
+        st.bar_chart(
+            data=dist_entrega,
+            x="Dias para Entrega",
+            y="Quantidade de Itens",
+            use_container_width=True,
+        )
+
+    st.divider()
+
+    # Tabela detalhada recolhida (Expander)
+
+    with st.expander("Ver amostras dos dados processados"):
+        st.dataframe(
+            df_filtrado[
+                [
+                    "order_id",
+                    "mes_compra",
+                    "price",
+                    "freight_value",
+                    "valor_total",
+                    "dias_entrega",
+                ]
+            ].head(15),
+            use_container_width=True,
+        )
